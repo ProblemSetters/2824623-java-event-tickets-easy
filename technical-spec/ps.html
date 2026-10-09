@@ -1,0 +1,201 @@
+<p dir="ltr">A community event gives out free tickets, with a limit on the total number of tickets and a limit on how many one person can hold. People can reserve tickets, return them, or transfer them to someone else. If one person can hold more than the limit, a transfer creates extra tickets, or more tickets are reserved than the event has, the event is overbooked and people with valid reservations are turned away.</p>
+
+<p dir="ltr"><br />
+Your task is to fix the event tickets tool so that every command updates the data correctly and prints the correct success message or error reason.</p>
+
+<p dir="ltr"><br />
+<strong>State File</strong></p>
+
+<p dir="ltr"><strong>File: <span style="font-family:Courier New , Courier , monospace;">data/event.json</span> (read-only)</strong></p>
+
+<p dir="ltr">For example:</p>
+
+<pre>
+<code class="language-json">{
+  &quot;event&quot;: &quot;Park Movie Night&quot;,
+  &quot;capacity&quot;: 27,
+  &quot;per_person_limit&quot;: 4
+}</code></pre>
+
+<p dir="ltr">Fields:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">event</span> (string): the event name.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">capacity</span> (integer): the total tickets available.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">per_person_limit</span> (integer): the most tickets one person may hold.</p>
+	</li>
+</ul>
+
+<p dir="ltr"><br />
+<strong>File: <span style="font-family:Courier New , Courier , monospace;">data/reservations.json</span></strong></p>
+
+<p dir="ltr">For example:</p>
+
+<pre>
+<code class="language-json">{
+  &quot;reservations&quot;: [
+    {&quot;person&quot;:&quot;sam&quot;,&quot;qty&quot;:4},
+    {&quot;person&quot;:&quot;riley&quot;,&quot;qty&quot;:2}
+  ]
+}</code></pre>
+
+<p dir="ltr">Fields:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">reservations</span> (list): one entry per person holding tickets, in the order they first reserved.</p>
+
+	<ul>
+		<li aria-level="2" dir="ltr">
+		<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">person</span> (string): the holder.</p>
+		</li>
+		<li aria-level="2" dir="ltr">
+		<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">qty</span> (integer): tickets held.</p>
+		</li>
+	</ul>
+	</li>
+</ul>
+
+<p dir="ltr">Tickets left are <span style="font-family:Courier New , Courier , monospace;">capacity</span> minus the sum of every <span style="font-family:Courier New , Courier , monospace;">qty</span>. A person whose holding drops to 0 is removed from the list, and reserving again later appends them at the end. When writing <span style="font-family:Courier New , Courier , monospace;">data/reservations.json</span> back, preserve the field order shown above, and keep reservations in the order they appear in the file.</p>
+
+<p dir="ltr"><br />
+<strong>Command Output</strong></p>
+
+<p dir="ltr">Each command prints a one-line result on success, or <span style="font-family:Courier New , Courier , monospace;">Error: &lt;REASON&gt;</span> on failure. Its rules are checked in the order listed, stopping at the first failure, and on failure <span style="font-family:Courier New , Courier , monospace;">data/reservations.json</span> is not modified.</p>
+
+<p dir="ltr"><br />
+<strong>Commands</strong></p>
+
+<p dir="ltr"><br />
+<strong><span style="font-family:Courier New , Courier , monospace;">reserve</span></strong></p>
+
+<p dir="ltr">Reserves tickets for a person.</p>
+
+<p dir="ltr"><strong>Usage</strong></p>
+
+<pre>
+<code>./tickets reserve &lt;person&gt; &lt;qty&gt;</code></pre>
+
+<p dir="ltr"><strong>Output</strong></p>
+
+<pre>
+<code>Reserved &lt;qty&gt; for &lt;person&gt; (&lt;held&gt; held, &lt;left&gt; left)</code></pre>
+
+<p dir="ltr"><strong>Rules</strong></p>
+
+<p dir="ltr">Check these rules in order and stop at the first failure:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">qty</span> is not a positive whole number, fail with <span style="font-family:Courier New , Courier , monospace;">QTY_INVALID</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If the person&#x27;s holding plus <span style="font-family:Courier New , Courier , monospace;">qty</span> would exceed <span style="font-family:Courier New , Courier , monospace;">per_person_limit</span>, fail with <span style="font-family:Courier New , Courier , monospace;">PER_PERSON_LIMIT</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">qty</span> is more than the tickets left, fail with <span style="font-family:Courier New , Courier , monospace;">SOLD_OUT</span>.</p>
+	</li>
+</ul>
+
+<p dir="ltr">On success:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">Add <span style="font-family:Courier New , Courier , monospace;">qty</span> to the person&#x27;s holding, appending a new entry for a first reservation.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation"><span style="font-family:Courier New , Courier , monospace;">&lt;held&gt;</span> is the person&#x27;s holding afterwards and <span style="font-family:Courier New , Courier , monospace;">&lt;left&gt;</span> the tickets left.</p>
+	</li>
+</ul>
+
+<p dir="ltr"><br />
+<strong><span style="font-family:Courier New , Courier , monospace;">release</span></strong></p>
+
+<p dir="ltr">Returns some of a person&#x27;s tickets to the event.</p>
+
+<p dir="ltr"><strong>Usage</strong></p>
+
+<pre>
+<code>./tickets release &lt;person&gt; &lt;qty&gt;</code></pre>
+
+<p dir="ltr"><strong>Output</strong></p>
+
+<pre>
+<code>Released &lt;qty&gt; for &lt;person&gt; (&lt;held&gt; held, &lt;left&gt; left)</code></pre>
+
+<p dir="ltr"><strong>Rules</strong></p>
+
+<p dir="ltr">Check these rules in order and stop at the first failure:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">qty</span> is not a positive whole number, fail with <span style="font-family:Courier New , Courier , monospace;">QTY_INVALID</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If the person holds no tickets, fail with <span style="font-family:Courier New , Courier , monospace;">NO_RESERVATION</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">qty</span> is more than the person holds, fail with <span style="font-family:Courier New , Courier , monospace;">NOT_ENOUGH_HELD</span>.</p>
+	</li>
+</ul>
+
+<p dir="ltr">On success, take <span style="font-family:Courier New , Courier , monospace;">qty</span> from the holding and remove the entry when it reaches 0.</p>
+
+<p dir="ltr"><br />
+<strong><span style="font-family:Courier New , Courier , monospace;">transfer</span></strong></p>
+
+<p dir="ltr">Moves tickets from one person to another.</p>
+
+<p dir="ltr"><strong>Usage</strong></p>
+
+<pre>
+<code>./tickets transfer &lt;from&gt; &lt;to&gt; &lt;qty&gt;</code></pre>
+
+<p dir="ltr"><strong>Output</strong></p>
+
+<pre>
+<code>Transferred &lt;qty&gt; from &lt;from&gt; to &lt;to&gt;</code></pre>
+
+<p dir="ltr"><strong>Rules</strong></p>
+
+<p dir="ltr">Check these rules in order and stop at the first failure:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">from</span> and <span style="font-family:Courier New , Courier , monospace;">to</span> are the same person, fail with <span style="font-family:Courier New , Courier , monospace;">SAME_PERSON</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">qty</span> is not a positive whole number, fail with <span style="font-family:Courier New , Courier , monospace;">QTY_INVALID</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">from</span> holds no tickets, fail with <span style="font-family:Courier New , Courier , monospace;">NO_RESERVATION</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">qty</span> is more than <span style="font-family:Courier New , Courier , monospace;">from</span> holds, fail with <span style="font-family:Courier New , Courier , monospace;">NOT_ENOUGH_HELD</span>.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">If <span style="font-family:Courier New , Courier , monospace;">to</span>&#x27;s holding plus <span style="font-family:Courier New , Courier , monospace;">qty</span> would exceed <span style="font-family:Courier New , Courier , monospace;">per_person_limit</span>, fail with <span style="font-family:Courier New , Courier , monospace;">PER_PERSON_LIMIT</span>.</p>
+	</li>
+</ul>
+
+<p dir="ltr">On success:</p>
+
+<ul>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">Take <span style="font-family:Courier New , Courier , monospace;">qty</span> from <span style="font-family:Courier New , Courier , monospace;">from</span>, removing the entry at 0.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">Add it to <span style="font-family:Courier New , Courier , monospace;">to</span>, appending a new entry when needed.</p>
+	</li>
+	<li aria-level="1" dir="ltr">
+	<p dir="ltr" role="presentation">The tickets left do not change.</p>
+	</li>
+</ul>
+
+<p><br />
+<strong>Note</strong>: Refer to <span style="font-family:Courier New , Courier , monospace;">README.md</span> for more details and examples.</p>
