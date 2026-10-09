@@ -1,0 +1,362 @@
+<p>One possible approach to solve this problem:<br />
+&nbsp;</p>
+
+<p><strong>src/main/java/com/tickets/Commands.java:</strong><br />
+&nbsp;</p>
+
+<pre>
+<code>package com.tickets;
+
+import com.tickets.Models.CommandResult;
+import com.tickets.Models.Event;
+import com.tickets.Models.Reason;
+import com.tickets.Models.Reservation;
+import com.tickets.Models.State;
+
+import java.util.Iterator;
+
+public final class Commands {
+    private Commands() {}
+
+    /// Read the ticket count typed on the command line.
+    private static Integer parseQty(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        long value = 0;
+        for (int i = 0; i &lt; text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch &lt; '0' || ch &gt; '9') {
+                return null;
+            }
+            value = Math.min(value * 10 + (ch - '0'), 1000000000L);
+        }
+        int qty = (int) value;
+        return qty &gt; 0 ? qty : null;
+    }
+
+    /// Find the reservation the person holds.
+    private static Reservation findHolder(State state, String person) {
+        for (Reservation entry : state.reservations) {
+            if (entry.person.equals(person)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /// Count the tickets the person holds.
+    private static int holdingOf(State state, String person) {
+        Reservation holder = findHolder(state, person);
+        return holder == null ? 0 : holder.qty;
+    }
+
+    /// Count the tickets still available for the event.
+    private static int ticketsLeft(State state, Event event) {
+        int taken = 0;
+        for (Reservation reservation : state.reservations) {
+            taken += reservation.qty;
+        }
+        return event.capacity - taken;
+    }
+
+    /// Give tickets to a person, adding them to the end of the list on their first reservation.
+    private static void addTickets(State state, String person, int qty) {
+        Reservation holder = findHolder(state, person);
+        if (holder == null) {
+            state.reservations.add(new Reservation(person, qty));
+            return;
+        }
+        holder.qty += qty;
+    }
+
+    /// Take tickets from a person, dropping them from the list once they hold none.
+    private static void takeTickets(State state, String person, int qty) {
+        Iterator&lt;Reservation&gt; it = state.reservations.iterator();
+        while (it.hasNext()) {
+            Reservation entry = it.next();
+            if (entry.person.equals(person)) {
+                entry.qty -= qty;
+                if (entry.qty == 0) {
+                    it.remove();
+                }
+                break;
+            }
+        }
+    }
+
+    /// Build a successful result carrying the command's output message.
+    private static CommandResult success(String message) {
+        return CommandResult.success(message);
+    }
+
+    /// Build a failed result carrying the reason code.
+    private static CommandResult failure(Reason reason) {
+        return CommandResult.failure(reason);
+    }
+
+    /// Reserve tickets for a person.
+    public static CommandResult reserve(State state, Event event, String person, String qtyText) {
+        Integer parsed = parseQty(qtyText);
+        if (parsed == null) {
+            return failure(Reason.QTY_INVALID);
+        }
+        int qty = parsed;
+        int held = holdingOf(state, person);
+        if (held + qty &gt; event.perPersonLimit) {
+            return failure(Reason.PER_PERSON_LIMIT);
+        }
+        if (qty &gt; ticketsLeft(state, event)) {
+            return failure(Reason.SOLD_OUT);
+        }
+        addTickets(state, person, qty);
+
+        return success("Reserved " + qty + " for " + person + " (" +
+                (held + qty) + " held, " +
+                ticketsLeft(state, event) + " left)");
+    }
+
+    /// Give a person's tickets back.
+    public static CommandResult release(State state, Event event, String person, String qtyText) {
+        Integer parsed = parseQty(qtyText);
+        if (parsed == null) {
+            return failure(Reason.QTY_INVALID);
+        }
+        int qty = parsed;
+        int held = holdingOf(state, person);
+        if (held == 0) {
+            return failure(Reason.NO_RESERVATION);
+        }
+        if (qty &gt; held) {
+            return failure(Reason.NOT_ENOUGH_HELD);
+        }
+        takeTickets(state, person, qty);
+
+        return success("Released " + qty + " for " + person + " (" +
+                holdingOf(state, person) + " held, " +
+                ticketsLeft(state, event) + " left)");
+    }
+
+    /// Move tickets from one person to another.
+    public static CommandResult transfer(State state, Event event, String from, String to, String qtyText) {
+        if (from.equals(to)) {
+            return failure(Reason.SAME_PERSON);
+        }
+        Integer parsed = parseQty(qtyText);
+        if (parsed == null) {
+            return failure(Reason.QTY_INVALID);
+        }
+        int qty = parsed;
+        int fromHeld = holdingOf(state, from);
+        if (fromHeld == 0) {
+            return failure(Reason.NO_RESERVATION);
+        }
+        if (qty &gt; fromHeld) {
+            return failure(Reason.NOT_ENOUGH_HELD);
+        }
+        int toHeld = holdingOf(state, to);
+        if (toHeld + qty &gt; event.perPersonLimit) {
+            return failure(Reason.PER_PERSON_LIMIT);
+        }
+        takeTickets(state, from, qty);
+        addTickets(state, to, qty);
+
+        return success("Transferred " + qty + " from " + from + " to " + to);
+    }
+}
+</code></pre>
+
+<p><br />
+<strong>src/main/java/com/tickets/Parser.java:</strong><br />
+&nbsp;</p>
+
+<pre>
+<code>package com.tickets;
+
+import com.tickets.Models.Event;
+import com.tickets.Models.Reservation;
+import com.tickets.Models.State;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public final class Parser {
+    private Parser() {}
+
+    private static final class JsonParser {
+        private final String json;
+        private int pos = 0;
+
+        JsonParser(String json) {
+            this.json = json;
+        }
+
+        Event parseEventDoc() {
+            Event event = new Event();
+            skipWs();
+            expect('{');
+            while (true) {
+                skipWs();
+                if (peek() == '}') {
+                    pos++;
+                    break;
+                }
+                String key = parseString();
+                skipWs();
+                expect(':');
+                skipWs();
+                if ("event".equals(key)) {
+                    event.event = parseString();
+                } else if ("capacity".equals(key)) {
+                    event.capacity = parseInt();
+                } else if ("per_person_limit".equals(key)) {
+                    event.perPersonLimit = parseInt();
+                }
+                skipWs();
+                if (peek() == ',') {
+                    pos++;
+                }
+            }
+            return event;
+        }
+
+        State parseReservationsDoc() {
+            State state = new State();
+            skipWs();
+            expect('{');
+            while (true) {
+                skipWs();
+                if (peek() == '}') {
+                    pos++;
+                    break;
+                }
+                String key = parseString();
+                skipWs();
+                expect(':');
+                skipWs();
+                if ("reservations".equals(key)) {
+                    parseArray(state.reservations);
+                }
+                skipWs();
+                if (peek() == ',') {
+                    pos++;
+                }
+            }
+            return state;
+        }
+
+        private void parseArray(List&lt;Reservation&gt; target) {
+            expect('[');
+            skipWs();
+            if (peek() == ']') {
+                pos++;
+                return;
+            }
+            while (true) {
+                target.add(parseReservationObject());
+                skipWs();
+                if (peek() == ',') {
+                    pos++;
+                    skipWs();
+                    continue;
+                }
+                expect(']');
+                break;
+            }
+        }
+
+        private Reservation parseReservationObject() {
+            Reservation reservation = new Reservation();
+            skipWs();
+            expect('{');
+            while (true) {
+                skipWs();
+                if (peek() == '}') {
+                    pos++;
+                    break;
+                }
+                String key = parseString();
+                skipWs();
+                expect(':');
+                skipWs();
+                if ("person".equals(key)) {
+                    reservation.person = parseString();
+                } else if ("qty".equals(key)) {
+                    reservation.qty = parseInt();
+                }
+                skipWs();
+                if (peek() == ',') {
+                    pos++;
+                }
+            }
+            return reservation;
+        }
+
+        private char peek() {
+            return pos &lt; json.length() ? json.charAt(pos) : '\0';
+        }
+
+        private void expect(char c) {
+            if (peek() != c) {
+                throw new RuntimeException("JSON parse error: expected '" + c + "' at position " + pos);
+            }
+            pos++;
+        }
+
+        private void skipWs() {
+            while (pos &lt; json.length() &amp;&amp; Character.isWhitespace(json.charAt(pos))) {
+                pos++;
+            }
+        }
+
+        private String parseString() {
+            expect('"');
+            StringBuilder value = new StringBuilder();
+            while (pos &lt; json.length() &amp;&amp; json.charAt(pos) != '"') {
+                if (json.charAt(pos) == '\\' &amp;&amp; pos + 1 &lt; json.length()) {
+                    pos++;
+                    char escaped = json.charAt(pos++);
+                    switch (escaped) {
+                        case 'n' -&gt; value.append('\n');
+                        case 'r' -&gt; value.append('\r');
+                        case 't' -&gt; value.append('\t');
+                        case '\\' -&gt; value.append('\\');
+                        case '"' -&gt; value.append('"');
+                        default -&gt; value.append(escaped);
+                    }
+                } else {
+                    value.append(json.charAt(pos++));
+                }
+            }
+            expect('"');
+            return value.toString();
+        }
+
+        private int parseInt() {
+            if (!Character.isDigit(peek())) {
+                throw new RuntimeException("JSON parse error: expected integer at position " + pos);
+            }
+            int value = 0;
+            while (pos &lt; json.length() &amp;&amp; Character.isDigit(json.charAt(pos))) {
+                value = value * 10 + (json.charAt(pos) - '0');
+                pos++;
+            }
+            return value;
+        }
+    }
+
+    /// Parse the read-only event JSON.
+    public static Event parseEventJson(String doc) {
+        JsonParser parser = new JsonParser(doc);
+        return parser.parseEventDoc();
+    }
+
+    /// Parse the reservations JSON.
+    public static State parseReservationsJson(String doc) {
+        JsonParser parser = new JsonParser(doc);
+        return parser.parseReservationsDoc();
+    }
+}
+</code></pre>
+
+<p>&nbsp;</p>
