@@ -22,7 +22,7 @@ public final class Parser {
             Event event = new Event();
             skipWs();
             expect('{');
-            while (true) {
+            while (event.capacity == 0 || event.perPersonLimit == 0) {
                 skipWs();
                 if (peek() == '}') {
                     pos++;
