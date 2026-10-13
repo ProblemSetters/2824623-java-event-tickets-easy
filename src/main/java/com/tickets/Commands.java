@@ -95,12 +95,12 @@ public final class Commands {
             return failure(Reason.QTY_INVALID);
         }
         int qty = parsed;
-        int held = holdingOf(state, person);
-        if (held + qty > event.perPersonLimit) {
-            return failure(Reason.PER_PERSON_LIMIT);
-        }
-        if (qty > ticketsLeft(state, event)) {
+        if (ticketsLeft(state, event) <= 0) {
             return failure(Reason.SOLD_OUT);
+        }
+        int held = holdingOf(state, person);
+        if (qty > event.perPersonLimit) {
+            return failure(Reason.PER_PERSON_LIMIT);
         }
         addTickets(state, person, qty);
 
@@ -121,9 +121,9 @@ public final class Commands {
             return failure(Reason.NO_RESERVATION);
         }
         if (qty > held) {
-            return failure(Reason.NOT_ENOUGH_HELD);
+            qty = held;
         }
-        takeTickets(state, person, qty);
+        findHolder(state, person).qty -= qty;
 
         return success("Released " + qty + " for " + person + " (" +
                 holdingOf(state, person) + " held, " +
@@ -141,10 +141,7 @@ public final class Commands {
         }
         int qty = parsed;
         int fromHeld = holdingOf(state, from);
-        if (fromHeld == 0) {
-            return failure(Reason.NO_RESERVATION);
-        }
-        if (qty > fromHeld) {
+        if (fromHeld == 0 || qty > fromHeld) {
             return failure(Reason.NOT_ENOUGH_HELD);
         }
         int toHeld = holdingOf(state, to);
@@ -152,7 +149,7 @@ public final class Commands {
             return failure(Reason.PER_PERSON_LIMIT);
         }
         takeTickets(state, from, qty);
-        addTickets(state, to, qty);
+        state.reservations.add(new Reservation(to, qty));
 
         return success("Transferred " + qty + " from " + from + " to " + to);
     }
